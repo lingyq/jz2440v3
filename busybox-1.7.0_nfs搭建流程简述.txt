@@ -1,0 +1,55 @@
+mkdir ~/busybox-1.7.0_nfs
+make CONFIG_PREFIX=~/busybox-1.7.0_nfs install
+mkdir lib
+cd ~/gcc-3.4.5-glibc-2.3.6/arm-linux/lib
+cp *.so* ~/busybox-1.7.0_nfs/lib -d
+
+cd ~/busybox-1.7.0_nfs
+mkdir dev ; cd $_;
+sudo mknod console c 5 1;
+sudo mknod null c 1 3;
+sudo mknod s3c2410_serial0 c 204 64;
+sudo mknod mtdblock0 b 31 0;
+sudo mknod mtdblock1 b 31 1;
+sudo mknod mtdblock2 b 31 2;
+
+cd ../
+mkdir proc mnt tmp sys root
+
+mkdir etc
+vim etc/inittab
+console::askfirst:-/bin/sh
+::sysinit:/etc/init.d/rcS 
+::ctrlaltdel:/sbin/reboot
+::shutdown:/bin/umount -a -r
+// ttySAC0::askfirst:-/bin/sh（实际上可以写成s3c2410_serial0::askfirst:-/bin/sh，因为z2440的串口名称是 s3c2410_serial0），在初始实验中要写成console才能正常挂载跟文件系统，至于支持ttySAC0，需要修改驱动，以后再深入
+mkdir -p etc/init.d
+vim etc/init.d/rcS
+#!/bin/sh
+ifconfig eth0 192.168.3.19
+mount -a
+mkdir /dev/pts
+mount -t devpts devpts /dev/pts
+echo /sbin/mdev > /proc/sys/kernel/hotplug
+mdev -s
+chmod +x etc/init.d/rcS
+vim etc/fstab
+# device mount-point type options dump fsck order
+proc /proc proc defaults 0 0
+sysfs /sys sysfs defaults 0 0
+tmpfs /dev tmpfs defaults 0 0
+tmpfs /tmp tmpfs defaults 0 0
+//特别说明1,mount -a会自动读取etc/fstab
+//特别说明2,若提示Cannot run '/etc/init.d/rcS': Permission denied，则可以手动设置权限再重启系统
+//特别说明3,若提示mount: mounting tmpfs on /tmp failed: Invalid argument 或者 mount: mounting tmpfs on /dev failed: Invalid argument
+//则：File systems ---> Pseudo filesystems ---> [*] Virtual memory file system support (former shm fs) 重新编译linux-2.6.22.26,烧录uImage即可
+//特别说明4,lsmod: can't open '/proc/modules': No such file or directory 可以手动创建该文件 mkdir /proc/modules
+sudo vim /etc/exports
+/home/lingyq/busybox-1.7.0_nfs *(subtree_check,rw,no_root_squash,async)
+ifconfig
+确认ip地址，要跟windows处于同一个网段，并且虚拟机使用管理员模式打开并设置桥接模式
+这里假设windows ip（说明，dos窗口下输入 ipconfig /all 才能看到物理地址，但是开发板的物理地址是根据ubuntu的物理地址来设置的，不建议随便乱写）：
+物理地址. . . . . . . . . . . . . : 34-97-F6-DF-43-BD
+IPv4 地址 . . . . . . . . . . . . : 192.168.3.18
+子网掩码 . . . . . . . . . . . . : 255.255.255.0
+默认网关. . . . . . . . . . . . . : 192.168.3.1
